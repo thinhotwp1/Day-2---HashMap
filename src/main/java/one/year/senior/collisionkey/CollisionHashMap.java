@@ -94,7 +94,6 @@ public class CollisionHashMap {
         Object bucketNode = table[bucketIndex];
 
         if (bucketNode != null) {
-            System.out.printf("Đã tìm thấy bucket tại index %d. Nội dung bên trong:%n", bucketIndex);
 
             // BƯỚC 5: Dùng reflection để duyệt qua LinkedList (qua trường "next")
             Object currentNode = bucketNode;
