@@ -8,7 +8,7 @@ public class CollisionHashMap {
     public static void main(String[] args) {
         try {
             System.out.println("-----------------BEGIN------------------");
-            HashMap<CollisionKey, String> map = new HashMap<>();
+            HashMap<CollisionKey, String> map = new HashMap<>(8);
             CollisionKey key1 = new CollisionKey("1");
             CollisionKey key2 = new CollisionKey("2");
 
@@ -52,6 +52,8 @@ public class CollisionHashMap {
             CollisionKey key7 = new CollisionKey("7");
             CollisionKey key8 = new CollisionKey("8");
             CollisionKey key9 = new CollisionKey("9");
+            CollisionKey key10 = new CollisionKey("10");
+            CollisionKey key11 = new CollisionKey("11");
 
             map.put(key3, "Giá trị của 3");
             map.put(key4, "Giá trị của 4");
@@ -60,6 +62,30 @@ public class CollisionHashMap {
             map.put(key7, "Giá trị của 7");
             map.put(key8, "Giá trị của 8");
             map.put(key9, "Giá trị của 9");
+            map.put(key10, "Giá trị của 10");
+            map.put(key11, "Giá trị của 11");
+
+
+            /**
+             * //  HashMap resize với 64 buckets
+             * // Key 1 -> Key 11 có cùng index = 1 sau khi hash
+             * table:
+             * [0] -> null
+             *
+             *                ┌── Key[9] ...
+             *            ┌── Key[8]
+             *  [1] ->    │   └── Key[7]
+             *        └── Key[6]
+             *            ├    ┌── Key[5] ...
+             *            └── Key[4] ...
+             *                 └── Key[3]
+             *
+             *
+             * [2] -> null
+             * [3] -> null
+             * ...
+             * [64]-> null
+             */
 
             System.out.println("\n--- Lấy lại thông tin sau khi map có thể đã resize ---");
             Object[] newTable = getBuckets(map); // getBuckets sẽ in ra capacity mới là 32
@@ -69,7 +95,7 @@ public class CollisionHashMap {
             System.out.printf("--> Index của bucket MỚI được tính là: %d & (%d - 1) = %d%n%n", key1.hashCode(), newTable.length, newBucketIndex);
 
             printBucketData(newTable, bucketIndex);
-            System.out.println("\n==> KẾT LUẬN: Đã chứng minh được cả 9 object nằm trong cùng 1 bucket dưới dạng TreeMap.");
+            System.out.println("\n==> KẾT LUẬN: Đã chứng minh được cả " + map.size() + " object nằm trong cùng 1 bucket dưới dạng TreeMap.");
 
             System.out.println("------------------END-------------------");
         } catch (NoSuchFieldException | IllegalAccessException e) {
@@ -90,25 +116,72 @@ public class CollisionHashMap {
     }
 
     private static void printBucketData(Object[] table, int bucketIndex) throws NoSuchFieldException, IllegalAccessException {
-        // BƯỚC 4: Lấy bucket (Node đầu tiên của LinkedList) tại index đó
         Object bucketNode = table[bucketIndex];
 
-        if (bucketNode != null) {
+        if (bucketNode == null) {
+            System.out.printf("Không tìm thấy bucket nào tại index %d.%n", bucketIndex);
+            return;
+        }
 
-            // BƯỚC 5: Dùng reflection để duyệt qua LinkedList (qua trường "next")
-            Object currentNode = bucketNode;
-            Field nextField = currentNode.getClass().getDeclaredField("next");
+        Class<?> nodeClass = bucketNode.getClass();
+        System.out.println("Bucket class: " + nodeClass.getName());
+
+        // Nếu là TreeNode thì in khác
+        if (nodeClass.getName().contains("TreeNode")) {
+            System.out.printf("Bucket tại index %d là TreeNode (dạng cây đỏ-đen).%n", bucketIndex);
+            printTreeNode(bucketNode);
+            return;
+        }
+
+        try {
+            // Nếu là LinkedList Node (HashMap$Node)
+            Field nextField = nodeClass.getDeclaredField("next");
             nextField.setAccessible(true);
 
+            Object currentNode = bucketNode;
             int nodeCount = 1;
+
             while (currentNode != null) {
                 System.out.printf("   - Node %d: %s%n", nodeCount++, currentNode);
-                // Lấy node tiếp theo trong chuỗi liên kết
                 currentNode = nextField.get(currentNode);
             }
-
-        } else {
-            System.out.printf("Không tìm thấy bucket nào tại index %d.%n", bucketIndex);
+        } catch (NoSuchFieldException e) {
+            // Không có trường "next" — có thể là TreeNode hoặc loại khác
+            System.out.printf("Không thể truy cập trường 'next' trong lớp %s.%n", nodeClass.getName());
+            System.out.println("Giá trị node: " + bucketNode);
         }
     }
+
+    private static void printTreeNode(Object treeNode) throws IllegalAccessException, NoSuchFieldException {
+        if (treeNode == null) return;
+
+        Class<?> cls = treeNode.getClass();
+
+        // Lấy field từ lớp hiện tại hoặc lớp cha (HashMap$Node)
+        Field keyField = getFieldRecursive(cls, "key");
+        Field valueField = getFieldRecursive(cls, "value");
+        Field leftField = getFieldRecursive(cls, "left");
+        Field rightField = getFieldRecursive(cls, "right");
+
+        System.out.printf("Key=%s, Value=%s%n", keyField.get(treeNode), valueField.get(treeNode));
+
+        printTreeNode(leftField.get(treeNode));
+        printTreeNode(rightField.get(treeNode));
+    }
+
+
+    private static Field getFieldRecursive(Class<?> cls, String fieldName) throws NoSuchFieldException {
+        while (cls != null) {
+            try {
+                Field field = cls.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                return field;
+            } catch (NoSuchFieldException e) {
+                cls = cls.getSuperclass(); // Tiếp tục tìm trong class cha
+            }
+        }
+        throw new NoSuchFieldException(fieldName);
+    }
+
+
 }
